@@ -3,6 +3,7 @@ package com.hai.wifiguard
 import android.os.Build
 import java.io.File
 import java.net.NetworkInterface
+import java.util.Collections
 
 internal enum class MonitorModeState {
     NOT_EXPOSED_BY_ANDROID,
@@ -133,9 +134,9 @@ internal object DeviceCapabilityDetector {
     }
 
     private fun detectWifiInterfaces(): List<String> = runCatching {
-        NetworkInterface.getNetworkInterfaces()
-            ?.toList()
-            .orEmpty()
+        val enumeration = NetworkInterface.getNetworkInterfaces()
+        val allInterfaces = if (enumeration != null) Collections.list(enumeration) else emptyList()
+        allInterfaces
             .map { it.name.orEmpty() }
             .filter { name ->
                 name.startsWith("wlan", ignoreCase = true) ||
