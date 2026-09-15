@@ -20,6 +20,13 @@ internal class AuditViewModel(application: Application) : AndroidViewModel(appli
     private val _state = MutableStateFlow(AuditUiState())
     val state: StateFlow<AuditUiState> = _state.asStateFlow()
 
+    init {
+        // Start immediately so the app identifies the currently connected Wi-Fi
+        // without asking the user to type an SSID. On first launch Android may
+        // still limit SSID/BSSID details until the Wi-Fi permission is granted.
+        runAudit()
+    }
+
     fun runAudit() {
         if (_state.value.isScanning) return
         viewModelScope.launch {
