@@ -29,6 +29,7 @@ internal data class WifiAuditResult(
     val dnsServers: List<String>,
     val openAdminPorts: List<Int>,
     val permissionLimited: Boolean,
+    val deviceCapabilities: DeviceWifiCapabilities,
     val recommendations: List<String>,
 )
 
@@ -42,13 +43,15 @@ internal class AuditRepository(private val context: Context) {
         context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
 
     suspend fun audit(): WifiAuditResult = withContext(Dispatchers.IO) {
+        val deviceCapabilities = DeviceCapabilityDetector.detect()
+
         val network = connectivityManager.activeNetwork
-            ?: return@withContext disconnectedResult()
+            ?: return@withContext disconnectedResult(deviceCapabilities)
         val networkCapabilities = connectivityManager.getNetworkCapabilities(network)
-            ?: return@withContext disconnectedResult()
+            ?: return@withContext disconnectedResult(deviceCapabilities)
 
         if (!networkCapabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) {
-            return@withContext disconnectedResult()
+            return@withContext disconnectedResult(deviceCapabilities)
         }
 
         val linkProperties = connectivityManager.getLinkProperties(network)
@@ -105,6 +108,7 @@ internal class AuditRepository(private val context: Context) {
             wps = wps,
             openPorts = openPorts,
             permissionLimited = permissionLimited,
+            deviceCapabilities = deviceCapabilities,
         )
 
         WifiAuditResult(
@@ -120,6 +124,7 @@ internal class AuditRepository(private val context: Context) {
             dnsServers = dnsServers,
             openAdminPorts = openPorts,
             permissionLimited = permissionLimited,
+            deviceCapabilities = deviceCapabilities,
             recommendations = recommendations,
         )
     }
@@ -177,8 +182,28 @@ internal class AuditRepository(private val context: Context) {
         wps: WpsState,
         openPorts: List<Int>,
         permissionLimited: Boolean,
+        deviceCapabilities: DeviceWifiCapabilities,
     ): List<String> {
         val items = mutableListOf<String>()
+
+        items += "ملف الاختبار المختار تلقائيًا: ${deviceCapabilities.selectedAuditProfile}."
+        items += when (deviceCapabilities.monitorMode) {
+            MonitorModeState.PRIVILEGED_STACK_DETECTED ->
+                "الجهاز يحمل مؤشرات Root + iw + واجهة Wi‑Fi. هذا يعني أن بيئة الفحص المتقدم قد تكون ممكنة، لكن دعم Monitor Mode نفسه لا يُفترض قبل التحقق من تعريف Wi‑Fi."
+            MonitorModeState.NOT_EXPOSED_BY_ANDROID ->
+                "Monitor Mode غير مكشوف لتطبيق Android العادي على هذا الجهاز؛ سيستخدم التطبيق أقوى فحص متاح عبر Android والشبكة المحلية."
+            MonitorModeState.UNKNOWN ->
+                "تعذر إثبات دعم Monitor Mode من مساحة التطبيق؛ لن يعرض التطبيق اختبارًا غير مدعوم على أنه حقيقي."
+        }
+
+        items += when (deviceCapabilities.packetCapture) {
+            PacketCaptureState.PRIVILEGED_CAPTURE_TOOL_DETECTED ->
+                "تم العثور على مؤشرات لأداة Packet Capture بصلاحيات مرتفعة؛ وجود الأداة لا يثبت إمكانية التقاط إطارات 802.11 الخام."
+            PacketCaptureState.ANDROID_TRAFFIC_ONLY ->
+                "المتاح حاليًا هو فحص حركة/خصائص الشبكة التي يسمح بها Android، وليس Raw 802.11 Packet Capture."
+            PacketCaptureState.UNKNOWN ->
+                "تعذر إثبات قدرة Packet Capture منخفضة المستوى على هذا الجهاز."
+        }
 
         when {
             security.startsWith("WPA3") ->
@@ -207,6 +232,7 @@ internal class AuditRepository(private val context: Context) {
             items += "صلاحية Wi‑Fi غير مكتملة؛ منحها يسمح بعرض اسم الشبكة وبيانات الحماية المتاحة بدقة أكبر."
         }
 
+        items += deviceCapabilities.notes
         items += "حدّث Firmware الراوتر، وغيّر كلمة مرور لوحة الإدارة عن كلمة مرور Wi‑Fi، واستخدم كلمة Wi‑Fi طويلة وفريدة."
         return items.distinct()
     }
@@ -240,7 +266,7 @@ internal class AuditRepository(private val context: Context) {
         }
     }.getOrDefault(false)
 
-    private fun disconnectedResult() = WifiAuditResult(
+    private fun disconnectedResult(deviceCapabilities: DeviceWifiCapabilities) = WifiAuditResult(
         connected = false,
         ssid = "غير متصل",
         bssid = "غير متاح",
@@ -253,6 +279,11 @@ internal class AuditRepository(private val context: Context) {
         dnsServers = emptyList(),
         openAdminPorts = emptyList(),
         permissionLimited = false,
-        recommendations = listOf("اتصل بشبكة Wi‑Fi التي تملكها ثم أعد الفحص."),
+        deviceCapabilities = deviceCapabilities,
+        recommendations = buildList {
+            add("اتصل بشبكة Wi‑Fi التي تملكها ثم أعد الفحص.")
+            add("ملف الاختبار المتاح على هذا الجهاز: ${deviceCapabilities.selectedAuditProfile}.")
+            addAll(deviceCapabilities.notes)
+        },
     )
 }
