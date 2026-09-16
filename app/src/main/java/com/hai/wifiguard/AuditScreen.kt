@@ -5,10 +5,10 @@ import android.content.pm.PackageManager
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -91,7 +91,11 @@ internal fun AuditApp(viewModel: AuditViewModel = viewModel()) {
         val missing = permissions.any {
             ContextCompat.checkSelfPermission(context, it) != PackageManager.PERMISSION_GRANTED
         }
-        if (missing) permissionLauncher.launch(permissions) else viewModel.runAudit()
+        if (missing) {
+            permissionLauncher.launch(permissions)
+        } else {
+            viewModel.runAudit()
+        }
     }
 
     Scaffold(
@@ -227,7 +231,9 @@ private fun HeroCard(
             }
 
             Button(
-                modifier = Modifier.fillMaxWidth().height(52.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp),
                 enabled = !scanning,
                 onClick = onScan,
                 shape = RoundedCornerShape(16.dp),
@@ -330,7 +336,11 @@ private fun RouterCard(result: WifiAuditResult) {
         InfoRow("DNS", result.dnsServers.ifEmpty { listOf("غير متاح") }.joinToString(" · "))
         InfoRow(
             "منافذ الإدارة",
-            if (result.openAdminPorts.isEmpty()) "لم تظهر على المنافذ الشائعة" else result.openAdminPorts.joinToString("، "),
+            if (result.openAdminPorts.isEmpty()) {
+                "لم تظهر على المنافذ الشائعة"
+            } else {
+                result.openAdminPorts.joinToString("، ")
+            },
         )
         Text(
             "يختبر التطبيق البوابة المحلية فقط على المنافذ الشائعة 80 / 443 / 8080 / 8443.",
@@ -364,7 +374,11 @@ private fun PasswordCard(ssid: String) {
             },
             singleLine = true,
             label = { Text("كلمة مرور Wi‑Fi") },
-            visualTransformation = if (visible) VisualTransformation.None else PasswordVisualTransformation(),
+            visualTransformation = if (visible) {
+                VisualTransformation.None
+            } else {
+                PasswordVisualTransformation()
+            },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
             trailingIcon = {
                 IconButton(onClick = { visible = !visible }) {
@@ -384,25 +398,26 @@ private fun PasswordCard(ssid: String) {
             Text("قيّم القوة داخل الجهاز")
         }
 
-        AnimatedVisibility(visible = assessment != null) {
-            assessment?.let { value ->
-                Column(
-                    modifier = Modifier.padding(top = 14.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
+        val value = assessment
+        if (value != null) {
+            Column(
+                modifier = Modifier.padding(top = 14.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                    ) {
-                        Text(value.label, fontWeight = FontWeight.Bold)
-                        Text("${value.score}/100", fontWeight = FontWeight.Bold)
-                    }
-                    LinearProgressIndicator(
-                        progress = { value.score / 100f },
-                        modifier = Modifier.fillMaxWidth().height(8.dp),
-                    )
-                    value.notes.forEach { note -> BulletLine(note) }
+                    Text(value.label, fontWeight = FontWeight.Bold)
+                    Text("${value.score}/100", fontWeight = FontWeight.Bold)
                 }
+                LinearProgressIndicator(
+                    progress = { value.score / 100f },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(8.dp),
+                )
+                value.notes.forEach { note -> BulletLine(note) }
             }
         }
     }
@@ -456,7 +471,11 @@ private fun NoticeCard(text: String, warning: Boolean) {
     } else {
         MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
     }
-    val tint = if (warning) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+    val tint = if (warning) {
+        MaterialTheme.colorScheme.error
+    } else {
+        MaterialTheme.colorScheme.primary
+    }
 
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -482,7 +501,7 @@ private fun NoticeCard(text: String, warning: Boolean) {
 private fun SectionCard(
     title: String,
     icon: @Composable () -> Unit,
-    content: @Composable Column.() -> Unit,
+    content: @Composable ColumnScope.() -> Unit,
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -512,7 +531,9 @@ private fun SectionCard(
 @Composable
 private fun InfoRow(label: String, value: String) {
     Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 6.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.Top,
     ) {
@@ -542,22 +563,22 @@ private fun BulletLine(text: String) {
 }
 
 private fun monitorModeText(state: MonitorModeState): String = when (state) {
-    MonitorModeState.PRIVILEGED_STACK_DETECTED -> "بيئة متقدمة محتملة — تحتاج تحقق تعريف Wi‑Fi"
-    MonitorModeState.NOT_EXPOSED_BY_ANDROID -> "غير مكشوف لتطبيق Android العادي"
-    MonitorModeState.UNKNOWN -> "غير مثبت"
+    MonitorModeState.PRIVILEGED_STACK_DETECTED -> "مؤشرات بيئة متقدمة موجودة"
+    MonitorModeState.NOT_EXPOSED_BY_ANDROID -> "غير مكشوف لتطبيق Android"
+    MonitorModeState.UNKNOWN -> "غير مؤكد"
 }
 
 private fun packetCaptureText(state: PacketCaptureState): String = when (state) {
-    PacketCaptureState.PRIVILEGED_CAPTURE_TOOL_DETECTED -> "أداة Capture مرتفعة الصلاحية موجودة"
-    PacketCaptureState.ANDROID_TRAFFIC_ONLY -> "ضمن حدود Android فقط"
-    PacketCaptureState.UNKNOWN -> "غير مثبت"
+    PacketCaptureState.PRIVILEGED_CAPTURE_TOOL_DETECTED -> "أداة التقاط متقدمة موجودة"
+    PacketCaptureState.ANDROID_TRAFFIC_ONLY -> "ضمن حدود Android"
+    PacketCaptureState.UNKNOWN -> "غير مؤكد"
 }
 
 private fun securityStatusText(result: WifiAuditResult): String {
     if (!result.connected) return "غير متصل بـ Wi‑Fi"
     return when (result.securityLevel) {
         SecurityLevel.STRONG -> "الحماية الأساسية قوية"
-        SecurityLevel.GOOD -> "الحماية جيدة — راجع التفاصيل"
+        SecurityLevel.GOOD -> "الحماية جيدة — راجع التوصيات"
         SecurityLevel.REVIEW -> "تحتاج مراجعة"
         SecurityLevel.WEAK -> "الحماية تحتاج تعديل"
         SecurityLevel.UNKNOWN -> "تعذر تحديد مستوى الحماية"
